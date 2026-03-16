@@ -478,7 +478,15 @@ namespace ReNamer.ViewModels
             });
 
             // 扫描路径
-            var validPaths = await FileService.ScanPathsAsync(rawPaths, new() { /* 你的配置 */ });
+            var validPaths = await FileService.ScanPathsAsync(rawPaths, new()
+            {
+                IsRecursive = true,
+                ProgressHandler = progressHandler,
+                IncludeFiles = CurrentPreset.Filters.File.Enable,
+                FileRegex = CurrentPreset.Filters.File.Regex,
+                IncludeDirectories = CurrentPreset.Filters.Folder.Enable,
+                DirectoryRegex = CurrentPreset.Filters.Folder.Regex,
+            });
 
             if (validPaths == null || validPaths.Count == 0)
             {
