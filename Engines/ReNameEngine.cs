@@ -124,17 +124,27 @@ namespace ReNamer.Engines
             return path.Split(Path.DirectorySeparatorChar).Length;
         }
 
+
         /// <summary>
-        /// 执行重命名时排序
+        /// 模拟父目录重命名对路径产生的影响计算“最终路径”
         /// </summary>
-        /// <param name="files"></param>
+        /// <param name="path"></param>
+        /// <param name="dirMap"></param>
         /// <returns></returns>
-        public static IEnumerable<ReNameFile> GetExecutionOrder(IEnumerable<ReNameFile> files)
+        private static string ApplyDirectoryRename(string path, Dictionary<string, string> dirMap)
         {
-            return files
-                .Where(f => f.Enable && !f.IsConflict)
-                .OrderByDescending(f => GetPathDepth(f.Path)) // 深路径先执行
-                .ThenBy(f => f.IsDirectory); // 文件优先，目录最后
+            foreach (var kv in dirMap)
+            {
+                string oldDir = kv.Key + Path.DirectorySeparatorChar;
+
+                if (path.StartsWith(oldDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    string relative = path.Substring(oldDir.Length);
+                    return Path.Combine(kv.Value, relative);
+                }
+            }
+
+            return path;
         }
 
         /// <summary>
@@ -142,45 +152,44 @@ namespace ReNamer.Engines
         /// </summary>
         public static void CheckConflicts(IEnumerable<ReNameFile> files)
         {
-            // 1. 用于记录本次任务中所有预测的目标路径
+            // 1️⃣ 记录任务中所有目标路径
             var targetPathSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // ⭐ 找出所有被重命名的目录
-            var renamedDirs = files
+            // 2️⃣ 构建目录 rename 映射表
+            var dirRenameMap = files
                 .Where(f => f.Enable && f.IsDirectory && f.Path != f.NewPath)
-                .Select(f => f.Path)
-                .ToList();
+                .ToDictionary(
+                    f => f.Path,
+                    f => f.NewPath,
+                    StringComparer.OrdinalIgnoreCase);
 
             foreach (var file in files)
             {
-                // 初始化状态
                 file.IsConflict = false;
                 file.ParentDirRenamed = false;
 
                 if (!file.Enable)
                     continue;
 
-                string newPath = file.NewPath;
+                // 计算最终路径（模拟父目录 rename）
+                string newPath = ApplyDirectoryRename(file.NewPath, dirRenameMap);
 
-                // ---------------------------
-                // 1️⃣ 磁盘冲突检测
-                // ---------------------------
+                // 磁盘冲突检测
+                bool existsOnDisk;
+
                 if (!file.IsDirectory)
-                    file.NewPathExist = File.Exists(newPath);
+                    existsOnDisk = File.Exists(newPath);
                 else
-                    file.NewPathExist = Directory.Exists(newPath);
+                    existsOnDisk = Directory.Exists(newPath);
 
-                bool existsOnDisk = (file.Path != newPath) && file.NewPathExist;
+                existsOnDisk = (file.Path != newPath) && existsOnDisk;
 
-                // ---------------------------
-                // 2️⃣ 任务内部重名冲突
-                // ---------------------------
+                // 任务内部冲突检测
                 bool existsInTask = targetPathSet.Contains(newPath);
 
-                // ---------------------------
-                // 3️⃣ 父目录重命名检测（新增）
-                // ---------------------------
-                foreach (var dir in renamedDirs)
+
+                // 父目录 重命名 检测
+                foreach (var dir in dirRenameMap.Keys)
                 {
                     if (file.Path.StartsWith(
                         dir + Path.DirectorySeparatorChar,
@@ -191,15 +200,13 @@ namespace ReNamer.Engines
                     }
                 }
 
-                // ---------------------------
-                // 4️⃣ 标记冲突
-                // ---------------------------
+                // 标记冲突
                 if (existsOnDisk || existsInTask)
                 {
                     file.IsConflict = true;
                 }
 
-                // 记录目标路径
+                // 记录任务路径
                 targetPathSet.Add(newPath);
             }
         }
@@ -220,36 +227,31 @@ namespace ReNamer.Engines
 
         /// <summary>
         /// 执行重命名
-        /// 处理：
-        /// 1. 父目录重命名
-        /// 2. 循环重命名
-        /// 3. 自动更新对象 Path
         /// </summary>
         public static void ExecuteRename(IEnumerable<ReNameFile> files)
         {
-            // 1️⃣ 过滤可执行项
-            var list = files
+            // 过滤可执行项
+            var enableFileList = files
                 .Where(f => f.Enable && !f.IsConflict && f.Path != f.NewPath)
                 .ToList();
 
-            if (list.Count == 0)
+            // 没有可执行的文件就停止
+            if (enableFileList.Count == 0)
                 return;
 
-            // 2️⃣ 按路径深度排序（深路径优先，文件优先）
-            var ordered = list
+            // 深路径优先，文件优先
+            var ordered = enableFileList
                 .OrderByDescending(f => GetPathDepth(f.Path))
                 .ThenBy(f => f.IsDirectory)
                 .ToList();
 
-            // 3️⃣ 构建映射表，用于检测循环重命名
+            // 构建 rename 映射
             var pathMap = ordered.ToDictionary(
                 f => f.Path,
                 f => f.NewPath,
                 StringComparer.OrdinalIgnoreCase);
 
-            // 4️⃣ 第一阶段：处理循环冲突（使用临时路径）
-            var tempRenamed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
+            // 解决循环重命名（cycle rename）问题
             foreach (var file in ordered)
             {
                 if (pathMap.TryGetValue(file.NewPath, out var target) &&
@@ -262,12 +264,14 @@ namespace ReNamer.Engines
                     else
                         File.Move(file.Path, tempPath);
 
-                    tempRenamed[file.Path] = tempPath;
                     file.Path = tempPath;
+
+                    // 同步 pathMap
+                    pathMap[tempPath] = file.NewPath;
                 }
             }
 
-            // 5️⃣ 第二阶段：执行真实 rename
+            // 开始正式重命名
             foreach (var file in ordered)
             {
                 string source = file.Path;
@@ -281,6 +285,9 @@ namespace ReNamer.Engines
                             continue;
 
                         Directory.Move(source, target);
+
+                        // 更新子路径 (这里必须传入 files 因为就算没启用重命名的 file 父目录也可能会重命名)
+                        UpdateChildrenPaths(files, source, target);
                     }
                     else
                     {
@@ -290,15 +297,45 @@ namespace ReNamer.Engines
                         File.Move(source, target);
                     }
 
-                    // 6️ 同步对象路径
+                    // 更新当前对象路径
                     file.Path = target;
                     file.UpdateToNewName(target);
-                    //file.NewPath = target;
                 }
-                catch (Exception ex)
+                catch
                 {
-                    // 这里可以记录日志
                     file.IsConflict = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 更新子项目路径
+        /// </summary>
+        /// <param name="files"></param>
+        /// <param name="oldDir"></param>
+        /// <param name="newDir"></param>
+        private static void UpdateChildrenPaths(IEnumerable<ReNameFile> files, string oldDir, string newDir)
+        {
+            string prefix = oldDir + Path.DirectorySeparatorChar;
+
+            foreach (var f in files)
+            {
+                // ---------- Path ----------
+                if (f.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    string relative = f.Path.Substring(prefix.Length);
+                    f.Path = Path.Combine(newDir, relative);
+                }
+
+                // ---------- Dir ----------
+                if (string.Equals(f.Dir, oldDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    f.Dir = newDir;
+                }
+                else if (f.Dir.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    string relative = f.Dir.Substring(prefix.Length);
+                    f.Dir = Path.Combine(newDir, relative);
                 }
             }
         }

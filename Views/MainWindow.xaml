@@ -403,7 +403,7 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="新文件名" Width="Auto" MaxWidth="150" MinWidth="50" Binding="{Binding NewName}" CanUserSort="False">
+                    <DataGridTextColumn Header="新文件名" Width="Auto" MaxWidth="150" MinWidth="100" Binding="{Binding NewName}" CanUserSort="False">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource TextOverflowStyle}">
                                 <Style.Triggers>
@@ -419,9 +419,10 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn Header="文件名" Width="Auto"  MaxWidth="150" MinWidth="50" Binding="{Binding Name}" IsReadOnly="True" ElementStyle="{StaticResource TextOverflowStyle}" />
+                    <DataGridTextColumn Header="文件名" Width="Auto"  MaxWidth="150" MinWidth="100" Binding="{Binding Name}" IsReadOnly="True" ElementStyle="{StaticResource TextOverflowStyle}" />
                     <DataGridTextColumn Header="扩展名" Width="Auto" MaxWidth="60"  MinWidth="50" Binding="{Binding Ext}" IsReadOnly="True" ElementStyle="{StaticResource TextOverflowStyle}"/>
-                    <DataGridTextColumn Header="源路径" Width="Auto"  Binding="{Binding Path}" IsReadOnly="True" ElementStyle="{StaticResource TextOverflowStyle}"/>
+                    <DataGridTextColumn Header="目录" Width="2*"  Binding="{Binding Dir}" IsReadOnly="True" ElementStyle="{StaticResource TextOverflowStyle}"/>
+                    <DataGridTextColumn Header="源路径" Width="*"  Binding="{Binding Path}" IsReadOnly="True" ElementStyle="{StaticResource TextOverflowStyle}"/>
                 </DataGrid.Columns>
             </DataGrid>
         </Grid>
