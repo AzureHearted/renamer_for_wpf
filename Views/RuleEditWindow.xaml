@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ReNamer.Views"
+        xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
         xmlns:vm="clr-namespace:ReNamer.ViewModels"
         d:DataContext="{d:DesignInstance Type=vm:RuleEditWindowViewModel, IsDesignTimeCreatable=False}"
         xmlns:converters="clr-namespace:ReNamer.Converters"
@@ -39,6 +40,14 @@
         <Style TargetType="TabControl" BasedOn="{StaticResource TabControlBaseStyle}"></Style>
         <Style TargetType="TabItem" BasedOn="{StaticResource TabItemStyle}"></Style>
     </hc:Window.Resources>
+    <i:Interaction.Triggers>
+        <i:KeyTrigger Key="Enter">
+            <i:InvokeCommandAction Command="{Binding EnterPressedCommand}" />
+        </i:KeyTrigger>
+        <i:KeyTrigger Key="Esc">
+            <i:InvokeCommandAction Command="{Binding CancelCommand}" />
+        </i:KeyTrigger>
+    </i:Interaction.Triggers>
     <Grid Margin="8" >
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>

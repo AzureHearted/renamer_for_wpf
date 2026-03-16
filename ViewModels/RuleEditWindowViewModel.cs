@@ -128,5 +128,24 @@ namespace ReNamer.ViewModels
         }
 
 
+        /// <summary>
+        /// 界面中按下回车的回调事件
+        /// </summary>
+        [RelayCommand]
+        private void OnEnterPressed()
+        {
+            // 根据枚举值分发逻辑
+            switch (Mode)
+            {
+                case WindowMode.Add:
+                    AddRule();
+                    break;
+                case WindowMode.Edit:
+                    SaveRule();
+                    break;
+
+            }
+        }
+
     }
 }
