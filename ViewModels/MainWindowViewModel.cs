@@ -992,10 +992,9 @@ namespace ReNamer.ViewModels
         /// 删除预设
         /// </summary>
         [RelayCommand(CanExecute = nameof(IsPresetInSet))]
-        private async Task RemovePreset()
+        private void RemovePreset()
         {
             if (CurrentPreset == null) return;
-
             var result = HandyControl.Controls.MessageBox.Show(
                     $"确认删除预设 \"{CurrentPreset.Name}.json\" ？(此操作无法恢复)",
                     "删除预设",
@@ -1003,7 +1002,7 @@ namespace ReNamer.ViewModels
                     MessageBoxImage.Warning);
             if (result == MessageBoxResult.Yes)
             {
-                if (await PresetService.RemovePreset(PresetDir, CurrentPreset.Name))
+                if (PresetService.RemovePreset(PresetDir, CurrentPreset.Name))
                 {
                     Debug.WriteLine("删除成功");
                     Presets.Remove(CurrentPreset);

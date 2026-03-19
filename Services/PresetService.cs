@@ -59,10 +59,10 @@ namespace ReNamer.Services
                 {
                     foreach (var ruleItem in rulesArray)
                     {
-                        // 1. 识别类型
+                        // 识别类型
                         var type = ruleItem["Type"]?.ToObject<RuleType>() ?? RuleType.Insert;
 
-                        // 2. 实例化具体子类
+                        // 实例化具体子类
                         BaseRule? concreteRule = type switch
                         {
                             RuleType.Insert => ruleItem.ToObject<InsertRule>(),
@@ -79,7 +79,7 @@ namespace ReNamer.Services
                         {
                             concreteRule.IsSilenced = true;
 
-                            // 3. 配置填充设置（解决大小写或属性匹配问题）
+                            // 配置填充设置（解决大小写或属性匹配问题）
                             var settings = new JsonSerializerSettings
                             {
                                 MetadataPropertyHandling = MetadataPropertyHandling.Ignore,
@@ -87,7 +87,7 @@ namespace ReNamer.Services
                             };
                             var serializer = JsonSerializer.Create(settings);
 
-                            // 4. 执行数据灌入
+
                             using (var reader = ruleItem.CreateReader())
                             {
                                 serializer.Populate(reader, concreteRule);
@@ -120,7 +120,7 @@ namespace ReNamer.Services
             var filePaths = await FileService.GetFilesByExtensionAsync(presetDir, "json");
             var tasks = filePaths.Select(path => GetPresetByPathAsync(path));
 
-            // 并行处理所有文件的解析，速度更快
+            // 并行处理所有文件
             var results = await Task.WhenAll(tasks);
 
             // 过滤掉解析失败的 (null) 并排序
@@ -142,22 +142,19 @@ namespace ReNamer.Services
         /// <param name="presetDir">预设文件所在的文件夹路径</param>
         /// <param name="presetName">预设名称</param>
         /// <returns></returns>
-        public static async Task<bool> RemovePreset(string presetDir, string presetName)
+        public static bool RemovePreset(string presetDir, string presetName)
         {
             var target = Path.Combine(presetDir, $"{presetName}.json");
-            if (File.Exists(target))
+
+            if (!File.Exists(target))
+                return false;
+
+            try
             {
-                try
-                {
-                    File.Delete(target);
-                    return true;
-                }
-                catch
-                {
-                    return false;
-                }
+                File.Delete(target);
+                return true;
             }
-            else
+            catch
             {
                 return false;
             }
