@@ -27,122 +27,21 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Xml.Linq;
-using static ReNamer.ViewModels.MainWindowViewModel;
 
 namespace ReNamer.ViewModels
 {
-
-    /// <summary>
-    /// 视图模型，继承了上面的 INotifyPropertyChanged 实现的一个类
-    /// </summary>
-    //public class MainWindowViewModel : INotify
-
-    // 必须标记为 partial，因为编译器要帮写另一半代码
     public partial class MainWindowViewModel : ObservableObject, IDropTarget
     {
-
-        // 文件列表
+        /// <summary>
+        /// 版本
+        /// </summary>
         [ObservableProperty]
-        private ObservableCollection<ReNameFile> _files = [];
+        private string _version = "v0.1.3-beta";
 
-
-        partial void OnFilesChanged(ObservableCollection<ReNameFile>? oldValue, ObservableCollection<ReNameFile> newValue)
-        {
-            // --- 1. 清理旧集合的监听 (防内存泄漏) ---
-            if (oldValue != null)
-            {
-                oldValue.CollectionChanged -= OnFilesCollectionChanged;
-
-                // 获取旧视图并清理 PropertyChanged
-                var oldView = CollectionViewSource.GetDefaultView(oldValue);
-                if (oldView is INotifyPropertyChanged npc)
-                    npc.PropertyChanged -= OnViewFilesPropertyChanged;
-            }
-
-            // --- 2. 挂载新集合的监听 ---
-            if (newValue != null)
-            {
-                // 监听数据层：Add, Remove, Reset (处理 CanUserDeleteRows)
-                newValue.CollectionChanged += OnFilesCollectionChanged;
-
-                // 获取新视图
-                var viewRules = CollectionViewSource.GetDefaultView(newValue);
-
-                // 监听排序层：点击表头 SortDescriptions 变化
-                if (viewRules is INotifyPropertyChanged npc)
-                {
-                    npc.PropertyChanged += OnViewFilesPropertyChanged;
-                }
-            }
-
-            NotifyCommands();
-        }
-
-        // 处理集合变动
-
-        private async void OnFilesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        {
-            await RefreshAll();
-        }
-
-        // 处理排序变动
-        private async void OnViewFilesPropertyChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            await RefreshAll();
-        }
-
-        // 规则列表
-        [ObservableProperty]
-
-        private ObservableCollection<BaseRule> _rules = [];
-
-
-        partial void OnRulesChanged(ObservableCollection<BaseRule>? oldValue, ObservableCollection<BaseRule> newValue)
-        {
-            // --- 1. 清理旧集合的监听 (防内存泄漏) ---
-            if (oldValue != null)
-            {
-                oldValue.CollectionChanged -= OnRulesCollectionChanged;
-
-                // 获取旧视图并清理 PropertyChanged
-                var oldView = CollectionViewSource.GetDefaultView(oldValue);
-                if (oldView is INotifyPropertyChanged npc)
-                    npc.PropertyChanged -= OnViewRulesPropertyChanged;
-            }
-
-            // --- 2. 挂载新集合的监听 ---
-            if (newValue != null)
-            {
-                // 监听数据层：Add, Remove, Reset (处理 CanUserDeleteRows)
-                newValue.CollectionChanged += OnRulesCollectionChanged;
-
-                // 获取新视图
-                var viewRules = CollectionViewSource.GetDefaultView(newValue);
-
-                // 监听排序层：点击表头 SortDescriptions 变化
-                if (viewRules is INotifyPropertyChanged npc)
-                {
-                    npc.PropertyChanged += OnViewRulesPropertyChanged;
-                }
-            }
-
-            NotifyCommands();
-        }
-
-        // 处理集合变动
-        private async void OnRulesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        {
-            await RefreshAll();
-        }
-
-        // 处理排序变动
-        private async void OnViewRulesPropertyChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            await RefreshAll();
-        }
-
-
+        /// <summary>
+        /// 标题
+        /// </summary>
+        public string Title => $"批量重命名工具 {Version}";
 
         // 预设目录
         [ObservableProperty]
@@ -167,21 +66,56 @@ namespace ReNamer.ViewModels
             }
         }
 
+        // 规则列表
+        [ObservableProperty]
 
-        /// <summary>
-        /// 当前 DataGrid 中视觉上的文件集合（包含排序、过滤后的顺序）
-        /// </summary>
-        public IEnumerable<ReNameFile> SortedFiles
+        private ObservableCollection<BaseRule> _rules = [];
+
+
+        partial void OnRulesChanged(ObservableCollection<BaseRule>? oldValue, ObservableCollection<BaseRule> newValue)
         {
-            get
+            // 清理旧集合的监听
+            if (oldValue != null)
             {
-                // GetDefaultView 会返回绑定到 Files 的那个 ICollectionView 实例
-                var view = CollectionViewSource.GetDefaultView(Files);
+                oldValue.CollectionChanged -= OnRules_CollectionChanged;
 
-                // 将视图中的内容转为 IEnumerable<ReNameFile>
-                // 这里的顺序就是 DataGrid 此时此刻显示的顺序
-                return view.Cast<ReNameFile>();
+                // 获取旧视图并清理 PropertyChanged
+                var oldView = CollectionViewSource.GetDefaultView(oldValue);
+                if (oldView is INotifyPropertyChanged npc)
+                    npc.PropertyChanged -= OnViewRules_PropertyChanged;
             }
+
+            // 挂载新集合的监听
+            if (newValue != null)
+            {
+                // 监听数据层：Add, Remove, Reset (处理 CanUserDeleteRows)
+                newValue.CollectionChanged += OnRules_CollectionChanged;
+
+                // 获取新视图
+                var viewRules = CollectionViewSource.GetDefaultView(newValue);
+
+                // 监听排序层：点击表头 SortDescriptions 变化
+                if (viewRules is INotifyPropertyChanged npc)
+                {
+                    npc.PropertyChanged += OnViewRules_PropertyChanged;
+                }
+            }
+
+            NotifyCommands();
+        }
+
+        private async void OnRules_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (_isRefreshing) return;
+            //Debug.WriteLine("OnRules_CollectionChanged");
+            await RefreshAll();
+        }
+
+        private async void OnViewRules_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_isRefreshing) return;
+            //Debug.WriteLine("OnViewRules_PropertyChanged");
+            await RefreshAll();
         }
 
         /// <summary>
@@ -209,6 +143,75 @@ namespace ReNamer.ViewModels
             NotifyCommands();
         }
 
+        // 文件列表
+        [ObservableProperty]
+        private ObservableCollection<ReNameFile> _files = [];
+
+        partial void OnFilesChanged(ObservableCollection<ReNameFile>? oldValue, ObservableCollection<ReNameFile> newValue)
+        {
+            // 清理旧集合的监听
+            if (oldValue != null)
+            {
+                oldValue.CollectionChanged -= OnFiles_CollectionChanged;
+
+                // 获取旧视图并清理 PropertyChanged
+                var oldView = CollectionViewSource.GetDefaultView(oldValue);
+                if (oldView is INotifyPropertyChanged npc)
+                    npc.PropertyChanged -= OnViewFiles_PropertyChanged;
+            }
+
+            // 挂载新集合的监听
+            if (newValue != null)
+            {
+                // 监听数据层：Add, Remove, Reset (处理 CanUserDeleteRows)
+                newValue.CollectionChanged += OnFiles_CollectionChanged;
+
+                // 获取新视图
+                var viewRules = CollectionViewSource.GetDefaultView(newValue);
+
+                // 监听排序层：点击表头 SortDescriptions 变化
+                if (viewRules is INotifyPropertyChanged npc)
+                {
+                    npc.PropertyChanged += OnViewFiles_PropertyChanged;
+                }
+            }
+
+            NotifyCommands();
+        }
+
+
+        private async void OnFiles_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (_isRefreshing) return;
+            //Debug.WriteLine("OnFiles_CollectionChanged");
+            await RefreshAll();
+        }
+
+        private async void OnViewFiles_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_isRefreshing) return;
+            //Debug.WriteLine("OnViewFiles_PropertyChanged");
+            await RefreshAll();
+        }
+
+
+        /// <summary>
+        /// 当前 DataGrid 中视觉上的文件集合（包含排序、过滤后的顺序）
+        /// </summary>
+        public IEnumerable<ReNameFile> SortedFiles
+        {
+            get
+            {
+                // GetDefaultView 会返回绑定到 Files 的那个 ICollectionView 实例
+                var view = CollectionViewSource.GetDefaultView(Files);
+
+                // 将视图中的内容转为 IEnumerable<ReNameFile>
+                // 这里的顺序就是 DataGrid 此时此刻显示的顺序
+                return view.Cast<ReNameFile>();
+            }
+        }
+
+
         // 选中的 Files
         [ObservableProperty]
         private ObservableCollection<ReNameFile> _selectedFiles = [];
@@ -224,6 +227,10 @@ namespace ReNamer.ViewModels
         [ObservableProperty]
         private string _statusMessage = String.Empty;
 
+        /// <summary>
+        /// 刷新标识符
+        /// </summary>
+        private bool _isRefreshing;
 
         /// <summary>
         /// 是否有事情正在处理
@@ -323,20 +330,18 @@ namespace ReNamer.ViewModels
 
             if (element == null) return;
 
-            // --- 新增：拦截约束 ---
             // 如果双击的是 CheckBox 或者其内部组件，直接返回
             if (FindParent<CheckBox>(element) != null)
             {
                 return;
             }
 
-            // 1. 尝试寻找点击位置下方的“行”容器
+            // 尝试寻找点击位置下方的“行”容器
             var row = FindParent<DataGridRow>(element);
 
             if (row != null)
             {
-                // --- 情况 A：点在了行上 ---
-                // row.Item 就是这一行绑定的数据对象（BaseRule）
+                // 当点击在了行上
                 if (row.Item is BaseRule selectedRule)
                 {
                     OpenRuleEditor(selectedRule); // 带参数打开，进入“编辑模式”
@@ -344,7 +349,7 @@ namespace ReNamer.ViewModels
             }
             else
             {
-                // --- 情况 B：没点在行上 ---
+                // 当点击没在行上
                 // 排除掉表头，剩下的就是空白区域
                 bool isClickOnHeader = FindParent<DataGridColumnHeader>(element) != null;
 
@@ -481,11 +486,11 @@ namespace ReNamer.ViewModels
             var validPaths = await FileService.ScanPathsAsync(rawPaths, new()
             {
                 IsRecursive = true,
-                ProgressHandler = progressHandler,
+                Progress = progressHandler,
                 IncludeFiles = CurrentPreset.Filters.File.Enable,
-                FileRegex = CurrentPreset.Filters.File.Regex,
+                FileRegex = RegexUtils.SafeCreateRegex(CurrentPreset.Filters.File.Regex),
                 IncludeDirectories = CurrentPreset.Filters.Folder.Enable,
-                DirectoryRegex = CurrentPreset.Filters.Folder.Regex,
+                DirectoryRegex = RegexUtils.SafeCreateRegex(CurrentPreset.Filters.Folder.Regex),
             });
 
             if (validPaths == null || validPaths.Count == 0)
@@ -497,7 +502,7 @@ namespace ReNamer.ViewModels
             // 后台批量处理：去重 + 创建对象
             var toAdd = await Task.Run(() =>
             {
-                // 提取现有路径（注意：如果 Files 很大，建议在 VM 里维护一个同步的 HashSet）
+                // 提取现有路径
                 var existing = new HashSet<string>(Files.Select(f => f.Path), StringComparer.OrdinalIgnoreCase);
 
                 return validPaths
@@ -506,12 +511,10 @@ namespace ReNamer.ViewModels
                     .ToList();
             });
 
-            // 批量更新 UI（核心优化点）
             if (toAdd.Count > 0)
             {
                 StatusMessage = $"正在同步 {toAdd.Count} 个项目到列表...";
 
-                // 关键：如果数据量极大，直接替换集合引用比 foreach.Add 快几十倍
                 var newList = new List<ReNameFile>(Files);
                 newList.AddRange(toAdd);
 
@@ -544,7 +547,6 @@ namespace ReNamer.ViewModels
         {
             // 如果外部没有传 token（比如手动点击预览按钮），则逻辑正常跑完
             // 如果是通过 RefreshAll 调用的，token 会在新的请求进来时变更为 Cancel 状态
-
             try
             {
                 ProgressValue = 0;
@@ -556,8 +558,7 @@ namespace ReNamer.ViewModels
                     StatusMessage = $"预览计算中... {percent}%";
                 });
 
-                // 核心：将 token 传给引擎
-                // 引擎内部需要在循环中调用 token.ThrowIfCancellationRequested()
+                // 将 token 传给引擎，引擎内部需要在循环中调用 token.ThrowIfCancellationRequested()
                 await ReNameEngine.ExecuteAsync(SortedFiles, Rules, progressHandler, token);
 
                 ProgressValue = 100;
@@ -565,10 +566,8 @@ namespace ReNamer.ViewModels
             }
             catch (OperationCanceledException)
             {
-                // 当计算被取消时，不需要报错，也不需要更新状态为“准备就绪”
-                // 因为下一个 RefreshAll 请求马上就会接管这里
                 Debug.WriteLine("预览计算已取消");
-                throw; // 向上抛出，让 RefreshAll 的 catch 块捕获
+                throw;
             }
             finally
             {
@@ -582,13 +581,15 @@ namespace ReNamer.ViewModels
 
         }
 
-        // 编写检查逻辑：至少有一个 IsOK 为 true
         private bool CanExecuteApplyRename()
         {
             return Files != null && Files.Any(f => f.IsOK);
         }
 
-        // 应用重命名结果
+        /// <summary>
+        /// 应用重命名结果
+        /// </summary>
+        /// <returns></returns>
         [RelayCommand(CanExecute = nameof(CanExecuteApplyRename))]
         private async Task ApplyRename()
         {
@@ -620,9 +621,7 @@ namespace ReNamer.ViewModels
         [RelayCommand]
         private async Task ToggleFileEnable()
         {
-            //await RefreshAll();
-            await PreviewRename();
-
+            await RefreshAll();
         }
 
         /// <summary>
@@ -631,9 +630,7 @@ namespace ReNamer.ViewModels
         [RelayCommand]
         private async Task ToggleRuleEnable()
         {
-            //await RefreshAll();
-            await PreviewRename();
-
+            await RefreshAll();
         }
 
         private bool CanRemoveSelectedRules() => SelectedRules.Any();
@@ -654,13 +651,13 @@ namespace ReNamer.ViewModels
             // 备份当前的排序信息
             var sortBackup = view.SortDescriptions.ToList();
 
-            // 暂时清空排序（防止删除时 DataGrid 频繁重排）
+            // 暂时清空排序
             view.SortDescriptions.Clear();
 
-            // 屏蔽 RefreshAll
+            // 标记为正在执行
             Processing = true;
 
-            // 执行替换（此处 DataGrid 会收到 Reset 通知）
+            // 执行替换
             Rules.Clear();
             foreach (var item in remainingItems) Rules.Add(item);
 
@@ -668,6 +665,7 @@ namespace ReNamer.ViewModels
             foreach (var sd in sortBackup) view.SortDescriptions.Add(sd);
 
             Processing = false;
+
             SelectedRules.Clear();
         }
 
@@ -677,7 +675,7 @@ namespace ReNamer.ViewModels
         /// <param name="rule"></param>
         /// <returns></returns>
         [RelayCommand]
-        private void EditRule(BaseRule rule) // 或者是你定义的 Rule 类名
+        private void EditRule(BaseRule rule)
         {
             if (rule != null && Rules.Contains(rule))
             {
@@ -706,13 +704,13 @@ namespace ReNamer.ViewModels
             // 备份当前的排序信息
             var sortBackup = view.SortDescriptions.ToList();
 
-            // 暂时清空排序（防止删除时 DataGrid 频繁重排）
+            // 暂时清空排序
             view.SortDescriptions.Clear();
 
-            // 屏蔽 RefreshAll
+            // 标记为正在执行
             Processing = true;
 
-            // 执行替换（此处 DataGrid 会收到 Reset 通知）
+            // 执行替换
             Files.Clear();
             foreach (var item in remainingItems) Files.Add(item);
 
@@ -721,6 +719,34 @@ namespace ReNamer.ViewModels
 
             Processing = false;
             SelectedFiles.Clear();
+        }
+
+        private bool CanOpenFile() => SelectedFiles.Any();
+
+        /// <summary>
+        /// 打开文件
+        /// </summary>
+        [RelayCommand(CanExecute = nameof(CanOpenFile))]
+        private void OpenFile()
+        {
+            if (SelectedFiles.Count == 0) return;
+            // 默认只使用第一个路径
+            var first = SelectedFiles.ElementAt(0);
+            if (first == null) return;
+            FileService.OpenPath(first.Path);
+        }
+
+        /// <summary>
+        /// 打开文件所在目录并选中文件
+        /// </summary>
+        [RelayCommand(CanExecute = nameof(CanOpenFile))]
+        private void OpenFileAndSelect()
+        {
+            if (SelectedFiles.Count == 0) return;
+            // 默认只使用第一个路径
+            var first = SelectedFiles.ElementAt(0);
+            if (first == null) return;
+            FileService.OpenAndSelect(first.Path);
         }
 
         /// <summary>
@@ -763,12 +789,8 @@ namespace ReNamer.ViewModels
             if (index != -1)
             {
                 // 替换集合中的元素
-                // 这会触发 ObservableCollection 的 CollectionChanged 事件，UI 会自动刷新
                 Presets[index] = p;
-
                 CurrentPreset = p;
-
-                //Debug.WriteLine($"成功重载预设并同步至 UI：{p.Name}");
             }
         }
 
@@ -1015,57 +1037,65 @@ namespace ReNamer.ViewModels
             RemovePresetCommand.NotifyCanExecuteChanged();
         }
 
+
+        /// <summary>
+        /// 刷新取消令牌
+        /// </summary>
         private CancellationTokenSource? _refreshCts;
 
-
-        // 刷新中心
+        // 刷新
         private async Task RefreshAll()
         {
-            // 1. 取消上一次的“等待”和“执行”
-            _refreshCts?.Cancel();
-            _refreshCts = new CancellationTokenSource();
-            var token = _refreshCts.Token;
+
+            //Debug.WriteLine("RefreshAll triggered");
+
+            // 创建一个取消令牌
+            var newCts = new CancellationTokenSource();
+            // 替换当前的 CancellationTokenSource，获取旧实例用于取消之前的刷新任务 （线程安全操作）
+            var oldCts = Interlocked.Exchange(ref _refreshCts, newCts);
+            // 取消之前未完成的刷新任务
+            oldCts?.Cancel();
+            // 释放 取消令牌
+            oldCts?.Dispose();
+
+            // 获取当前刷新对应的取消令牌
+            var token = newCts.Token;
+
+            _isRefreshing = true;   // 屏蔽刷新触发
 
             try
             {
-                // 2. 防抖等待
+                // 防抖延迟（期间如果有新请求，会通过取消 token 中断）
                 await Task.Delay(200, token);
 
-                // 3. 业务锁改为“重入检查”而不是直接 return
-                // 这里的 Processing 主要用于 UI 状态显示（比如转圈圈）
                 Processing = true;
 
-                // 4. 正式逻辑
-                OnPropertyChanged(nameof(Rules));
-                OnPropertyChanged(nameof(Files));
+
                 NotifyCommands();
 
-                if (Files != null && Files.Any())
+                if (Files.Any())
                 {
-                    // 将 token 传入，让预览逻辑也可以被中途取消
                     await PreviewRename(token);
                 }
             }
             catch (OperationCanceledException)
             {
-                // 静默退出
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"RefreshAll Error: {ex.Message}");
+                // 被新请求顶掉
+                return;
             }
             finally
             {
-                // 只有当这是最后一个活跃的任务时，才关闭 Processing 状态
-                if (!token.IsCancellationRequested)
+                // 只有当前仍是“最新的一次刷新”且未被取消，才允许收尾
+                if (_refreshCts == newCts && !token.IsCancellationRequested)
                 {
                     Processing = false;
+                    _isRefreshing = false;  // 刷新结束，允许后续刷新触发
                 }
             }
         }
 
         /// <summary>
-        /// 物理顺序同步方法
+        /// 同步物理顺序
         /// </summary>
         private void SyncPhysicalOrder<T>(ObservableCollection<T> physicalList, List<T> visualOrder)
         {
@@ -1096,32 +1126,31 @@ namespace ReNamer.ViewModels
                 {
                     var view = CollectionViewSource.GetDefaultView(dg.ItemsSource);
 
-                    // 只有当 SortDescriptions 确实存在时才进入
+                    // 只有当 SortDescriptions 存在时才进入
                     if (view.SortDescriptions.Count > 0)
                     {
-                        // 提取视觉顺序
+                        // 拿到当前排序结果
                         var visualItems = dg.Items.Cast<object>().ToList();
                         if (visualItems.Count > 0)
                         {
-                            // 执行固化（根据类型分流）
+                            // 固化排序 (分别处理文件列表和规则列表)
                             var firstItem = visualItems[0];
                             if (firstItem is ReNameFile)
                                 SyncPhysicalOrder(Files, visualItems.Cast<ReNameFile>().ToList());
                             else if (firstItem is BaseRule)
                                 SyncPhysicalOrder(Rules, visualItems.Cast<BaseRule>().ToList());
 
-                            // 关键：立即清空排序描述，这样下一次 DragOver 触发时 
-                            // view.SortDescriptions.Count 就变成 0 了，不会再进这个 if 块
+                            // 清空 SortDescriptions，防止重复进入当前执行逻辑
                             view.SortDescriptions.Clear();
 
-                            // 重置列头状态（去掉那个小箭头）
+                            // 重置列头状态
                             foreach (var col in dg.Columns)
                             {
                                 if (col.SortDirection != null)
                                     col.SortDirection = null;
                             }
 
-                            // 5. 刷新视图
+                            // 刷新视图
                             dg.Items.Refresh();
 
                             Debug.WriteLine("排序已固化为物理顺序");
@@ -1139,21 +1168,18 @@ namespace ReNamer.ViewModels
         /// </summary>
         void IDropTarget.Drop(IDropInfo dropInfo)
         {
-            // 根据拖拽对象类型，提前快照记录选中项
-            // 这里假设 dropInfo.Data 是我们要移动的数据
+            // 提前记录选中项
             List<ReNameFile> selectedFilesSnapshot = [.. SelectedFiles];
             List<BaseRule> selectedRulesSnapshot = [.. SelectedRules];
 
-            // 执行物理移动（这会导致集合顺序重排）
+            // 执行物理移动
             GongSolutions.Wpf.DragDrop.DragDrop.DefaultDropHandler.Drop(dropInfo);
 
-
-            // 提升用户体验
             if (dropInfo.VisualTarget is DataGrid dg)
             {
                 dg.Focus();
 
-                // 恢复视觉焦点：ScrollIntoView 不能传集合，传第一个选中的项即可
+                // 恢复视觉焦点，ScrollIntoView 不能传集合，传第一个选中的项即可
                 var firstSelected = selectedFilesSnapshot?.FirstOrDefault() as object
                                   ?? selectedRulesSnapshot?.FirstOrDefault();
 
@@ -1163,15 +1189,14 @@ namespace ReNamer.ViewModels
                 }
             }
 
+            // 触发刷新
             _ = RefreshAll();
 
             // 恢复选中状态
-            // 注意：如果是多选，通常需要重新赋值给绑定的选中集合
             if (dropInfo.Data is ReNameFile || (dropInfo.Data is IEnumerable ef && ef.Cast<object>().Any(x => x is ReNameFile)))
             {
-                if (selectedFilesSnapshot != null)
+                if (selectedFilesSnapshot != null && selectedFilesSnapshot.Any())
                 {
-                    // 重新填回你的选中记录集合
                     SelectedFiles.Clear();
 
                     foreach (var item in selectedFilesSnapshot)
@@ -1182,7 +1207,7 @@ namespace ReNamer.ViewModels
             }
             else if (dropInfo.Data is BaseRule || (dropInfo.Data is IEnumerable er && er.Cast<object>().Any(x => x is BaseRule)))
             {
-                if (selectedRulesSnapshot != null)
+                if (selectedRulesSnapshot != null && selectedRulesSnapshot.Any())
                 {
                     SelectedRules.Clear();
 

@@ -15,7 +15,9 @@ namespace ReNamer.Services
 
     public static class FileService
     {
-
+        /// <summary>
+        /// 扫描方法配置对象
+        /// </summary>
         public class ScanOptions
         {
             /// <summary>
@@ -31,7 +33,7 @@ namespace ReNamer.Services
             /// <summary>
             /// 文件夹匹配正则（为空则全部）
             /// </summary>
-            public string? DirectoryRegex { get; set; }
+            public Regex? DirectoryRegex { get; set; }
 
             /// <summary>
             /// 是否包含文件
@@ -41,42 +43,27 @@ namespace ReNamer.Services
             /// <summary>
             /// 文件匹配正则（为空则全部）
             /// </summary>
-            public string? FileRegex { get; set; }
+            public Regex? FileRegex { get; set; }
 
             /// <summary>
-            /// 进度报告
+            /// 进度
             /// </summary>
-            public IProgress<int>? ProgressHandler { get; set; }
+            public IProgress<int>? Progress { get; set; }
         }
 
-        private static Regex? CreateSafeRegex(string? pattern)
-        {
-            if (string.IsNullOrWhiteSpace(pattern))
-                return null;
-
-            try
-            {
-                return new Regex(pattern, RegexOptions.IgnoreCase);
-            }
-            catch (ArgumentException)
-            {
-                // 正则表达式非法，返回一个永远不匹配的 Regex
-                return new Regex("$a");
-            }
-        }
 
         /// <summary>
-        /// 扫描所有路径，提取文件
+        /// 扫描路径 （异步）
         /// </summary>
-        /// <param name="isRecursive">是否递归扫描子目录</param>
+        /// <param name="paths">要扫描的路径</param>
+        /// <param name="options">扫描配置</param>
+        /// <returns></returns>
         public static async Task<List<string>> ScanPathsAsync(string[] paths, ScanOptions options)
         {
+            // 在后台线程进行操作（并等待结果返回）
             return await Task.Run(() =>
             {
                 var results = new List<string>();
-
-                Regex? fileRegex = CreateSafeRegex(options.FileRegex);
-                Regex? dirRegex = CreateSafeRegex(options.DirectoryRegex);
 
                 int processed = 0;
 
@@ -84,19 +71,19 @@ namespace ReNamer.Services
                 {
                     if (File.Exists(path))
                     {
-                        TryAddFile(path, results, options, fileRegex);
+                        TryAddFile(path, results, options);
                     }
                     else if (Directory.Exists(path))
                     {
-                        TryAddDirectory(path, results, options, dirRegex);
+                        TryAddDirectory(path, results, options);
 
-                        ScanDirectory(path, results, options, fileRegex, dirRegex);
+                        ScanDirectory(path, results, options);
                     }
 
                     processed++;
 
                     if (paths.Length > 0)
-                        options.ProgressHandler?.Report(processed * 100 / paths.Length);
+                        options.Progress?.Report(processed * 100 / paths.Length);
                 }
 
                 return results.Distinct().ToList();
@@ -106,12 +93,12 @@ namespace ReNamer.Services
         /// <summary>
         /// 扫描目录
         /// </summary>
-        /// <param name="directory"></param>
-        /// <param name="results"></param>
-        /// <param name="options"></param>
+        /// <param name="directory">目录</param>
+        /// <param name="results">外部解雇（用来和扫描出来的结果进行拼接）</param>
+        /// <param name="options">扫描配置</param>
         /// <param name="fileRegex"></param>
         /// <param name="dirRegex"></param>
-        private static void ScanDirectory(string directory, List<string> results, ScanOptions options, Regex? fileRegex, Regex? dirRegex)
+        private static void ScanDirectory(string directory, List<string> results, ScanOptions options)
         {
             try
             {
@@ -120,18 +107,18 @@ namespace ReNamer.Services
                 {
                     foreach (var file in Directory.GetFiles(directory))
                     {
-                        TryAddFile(file, results, options, fileRegex);
+                        TryAddFile(file, results, options);
                     }
                 }
 
                 // 子目录
                 foreach (var dir in Directory.GetDirectories(directory))
                 {
-                    TryAddDirectory(dir, results, options, dirRegex);
+                    TryAddDirectory(dir, results, options);
 
                     if (options.IsRecursive)
                     {
-                        ScanDirectory(dir, results, options, fileRegex, dirRegex);
+                        ScanDirectory(dir, results, options);
                     }
                 }
             }
@@ -148,18 +135,18 @@ namespace ReNamer.Services
         /// <param name="results"></param>
         /// <param name="options"></param>
         /// <param name="fileRegex"></param>
-        private static void TryAddFile(string file, List<string> results, ScanOptions options, Regex? fileRegex)
+        private static void TryAddFile(string file, List<string> results, ScanOptions options)
         {
             if (!options.IncludeFiles)
                 return;
 
-            if (fileRegex == null)
+            if (options.FileRegex == null)
             {
                 results.Add(file);
                 return;
             }
 
-            if (fileRegex.IsMatch(Path.GetFileName(file)))
+            if (options.FileRegex.IsMatch(Path.GetFileName(file)))
             {
                 results.Add(file);
             }
@@ -172,18 +159,18 @@ namespace ReNamer.Services
         /// <param name="results"></param>
         /// <param name="options"></param>
         /// <param name="dirRegex"></param>
-        private static void TryAddDirectory(string dir, List<string> results, ScanOptions options, Regex? dirRegex)
+        private static void TryAddDirectory(string dir, List<string> results, ScanOptions options)
         {
             if (!options.IncludeDirectories)
                 return;
 
-            if (dirRegex == null)
+            if (options.DirectoryRegex == null)
             {
                 results.Add(dir);
                 return;
             }
 
-            if (dirRegex.IsMatch(Path.GetFileName(dir)))
+            if (options.DirectoryRegex.IsMatch(Path.GetFileName(dir)))
             {
                 results.Add(dir);
             }
@@ -214,7 +201,7 @@ namespace ReNamer.Services
         }
 
 
-        // 配置 JSON 序列化选项（全局静态复用，提高性能）
+        // 配置 JSON 序列化选项
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
             // 解决中文乱码：默认会把中文转义为 Unicode 编码，这里强制不转义
@@ -226,7 +213,7 @@ namespace ReNamer.Services
         };
 
         /// <summary>
-        /// 将对象异步保存为 JSON 文件
+        /// 将对象保存为 JSON 文件 (异步)
         /// </summary>
         /// <typeparam name="T">要保存的数据类型</typeparam>
         /// <param name="filePath">保存路径</param>
@@ -257,7 +244,7 @@ namespace ReNamer.Services
         }
 
         /// <summary>
-        /// 将文本内容异步保存到指定文件
+        /// 将文本内容保存到指定文件 (异步)
         /// </summary>
         /// <param name="filePath">完整的文件路径 (包含扩展名，如 .json 或 .txt)</param>
         /// <param name="content">要保存的文本字符串</param>
@@ -290,7 +277,7 @@ namespace ReNamer.Services
         }
 
         /// <summary>
-        /// 获取指定目录下指定扩展名的文件列表（不含子目录）
+        /// 获取指定目录下指定扩展名的文件列表（不含子目录）(异步)
         /// </summary>
         /// <param name="directoryPath">目录路径</param>
         /// <param name="extension">扩展名（例如 ".json" 或 "json"）</param>
@@ -321,7 +308,7 @@ namespace ReNamer.Services
         }
 
         /// <summary>
-        /// 异步移动文件
+        /// 移动文件 (异步)
         /// </summary>
         /// <param name="source">源路径</param>
         /// <param name="target">目标路径</param>
@@ -349,7 +336,7 @@ namespace ReNamer.Services
         }
 
         /// <summary>
-        /// 异步删除文件
+        /// 删除文件 (异步)
         /// </summary>
         /// <param name="path">文件完整路径</param>
         /// <returns>返回 true 表示删除成功或文件本身就不存在；false 表示删除失败（如权限不足、文件被占用）</returns>
@@ -372,6 +359,37 @@ namespace ReNamer.Services
                     Debug.WriteLine($"删除失败: {path}, 错误: {ex.Message}");
                     return false;
                 }
+            });
+        }
+
+        /// <summary>
+        /// 打开路径
+        /// </summary>
+        /// <returns></returns>
+        public static void OpenPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true
+            });
+        }
+
+        /// <summary>
+        /// 打开路径所在目录（并选中）
+        /// </summary>
+        /// <param name="path"></param>
+        public static void OpenAndSelect(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                UseShellExecute = true,
+                Arguments = $"/select,\"{path}\"",
             });
         }
     }

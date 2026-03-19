@@ -30,20 +30,9 @@ namespace ReNamer.Views
 
             DataContext = vm;
 
-            // 当 DataContext（即 VM）准备好后
             vm.OnAddRule += (e) => this.DialogResult = true;
             vm.OnSaveRule += (e) => this.DialogResult = true;
             vm.OnCancel += () => this.DialogResult = false;
-            //DataContextChanged += (s, e) =>
-            //{
-            //    if (DataContext is RuleEditWindowViewModel vm)
-            //    {
-            //        // 订阅 VM 的信号：一旦触发保存或取消，就关窗
-            //        vm.OnSaveRule += (rule) => this.DialogResult = true;
-            //        vm.OnAddRule += (rule) => this.DialogResult = true;
-            //        vm.OnCancel += () => this.DialogResult = false;
-            //    }
-            //};
         }
     }
 }

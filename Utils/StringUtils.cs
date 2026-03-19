@@ -8,7 +8,10 @@ using System.Threading.Tasks;
 
 namespace ReNamer.Utils
 {
-    internal class StringUtils
+    /// <summary>
+    /// 字符串工具
+    /// </summary>
+    public class StringUtils
     {
         /// <summary>
         /// 插入内容到指定索引
@@ -35,7 +38,6 @@ namespace ReNamer.Utils
                 insertPos = strLength - index;
             }
 
-            // --- 边界容错处理 ---
             // 确保位置不会小于 0 且不会超过字符串当前长度
             insertPos = Math.Clamp(insertPos, 0, strLength);
 
@@ -48,10 +50,10 @@ namespace ReNamer.Utils
         /// <param name="original">原始字符串</param>
         /// <param name="insert">要插入的内容</param>
         /// <param name="match">要匹配的字面量字符串</param>
-        /// <param name="position">位置：InsertPosition.Before 或 InsertPosition.After </param>
+        /// <param name="position">插入位置</param>
         /// <param name="ignoreCase">是否忽略大小写</param>
         /// <param name="isExactMatch">是否全字匹配</param>
-        /// <returns>修改后的字符串</returns>
+        /// <returns></returns>
         public static string InsertByMatch(
             string original,
             string insert,
@@ -64,10 +66,9 @@ namespace ReNamer.Utils
                 return original;
 
             // 构建正则表达式
-            // 使用 Regex.Escape 来转义正则特殊字符
-            string escapedMatch = Regex.Escape(match);
-            // 构建
+            string escapedMatch = Regex.Escape(match); // 转义正则特殊字符
             string pattern = isExactMatch ? $@"\b({escapedMatch})\b" : $"({escapedMatch})";
+
             // 设置正则选项
             RegexOptions options = RegexOptions.None;
             if (ignoreCase)
@@ -94,7 +95,7 @@ namespace ReNamer.Utils
                 replacement = "${1}" + safeInsert;
             }
 
-            // --- 3. 执行替换 ---
+            // 执行替换
             return Regex.Replace(original, pattern, replacement, options);
         }
 
@@ -113,21 +114,19 @@ namespace ReNamer.Utils
             if (string.IsNullOrEmpty(original) || string.IsNullOrEmpty(match))
                 return original;
 
-            // 1. 构建正则表达式 Pattern
-            // Regex.Escape 相当于 AHK 的 \Q...\E，确保 match 里的符号（如.或*）不被当做正则元字符
+            // 构建正则表达式 Pattern
             string escapedMatch = Regex.Escape(match);
             string pattern = isExactMatch ? $@"\b{escapedMatch}\b" : escapedMatch;
 
-            // 2. 配置正则选项
+            // 配置正则选项
             RegexOptions options = ignoreCase ? RegexOptions.IgnoreCase : RegexOptions.None;
             Regex regex = new Regex(pattern, options);
 
-            // 3. 处理替换逻辑
+            // 处理替换逻辑
             switch (range)
             {
                 case MatchRange.First:
-                    // C# Regex.Replace 接受 count 参数，1 表示只替换第一个
-                    return regex.Replace(original, replaceTo, 1);
+                    return regex.Replace(original, replaceTo, 1); // C# Regex.Replace 接受 count 参数，1 表示只替换第一个
 
                 case MatchRange.Last:
                     // 查找所有匹配项
@@ -138,9 +137,7 @@ namespace ReNamer.Utils
                     Match lastMatch = matches[matches.Count - 1];
 
                     // 手动拼接：前半部分 + 替换值 + 后半部分
-                    return original.Remove(lastMatch.Index, lastMatch.Length)
-                                   .Insert(lastMatch.Index, replaceTo);
-
+                    return original.Remove(lastMatch.Index, lastMatch.Length).Insert(lastMatch.Index, replaceTo);
                 case MatchRange.All:
                 default:
                     return regex.Replace(original, replaceTo);
@@ -161,6 +158,4 @@ namespace ReNamer.Utils
             return Replace(original, match, "", range, ignoreCase, isExactMatch);
         }
     }
-
-
 }

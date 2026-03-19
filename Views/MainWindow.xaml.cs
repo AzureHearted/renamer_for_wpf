@@ -27,6 +27,10 @@ namespace ReNamer.Views
         public MainWindow()
         {
             InitializeComponent();
+
+            var vm = new MainWindowViewModel();
+
+            DataContext = vm;
         }
 
 

@@ -10,14 +10,17 @@ using System.Threading.Tasks;
 
 namespace ReNamer.Engines
 {
+    /// <summary>
+    /// 重命名引擎
+    /// </summary>
     public static class ReNameEngine
     {
 
         /// <summary>
-        /// 核心调度器：按顺序应用所有规则
+        /// 调度器：按顺序应用所有规则
         /// </summary>
-        /// <param name="files">文件列表 (ReNameFile)</param>
-        /// <param name="rules">规则池 (比如 ObservableCollection<RuleBase>)</param>
+        /// <param name="files">文件列表</param>
+        /// <param name="rules">规则列表</param>
         public static void Execute(IEnumerable<ReNameFile> files, IEnumerable<BaseRule> rules)
         {
             // 1. 初始化：每一轮计算前，先重置 NewName 为原始 Name
@@ -42,36 +45,39 @@ namespace ReNamer.Engines
         }
 
         /// <summary>
-        /// (异步) 核心调度器：按顺序应用所有规则
+        /// (异步) 调度器：按顺序应用所有规则
         /// </summary>
-        /// <param name="files">文件列表 (ReNameFile)</param>
-        /// <param name="rules">规则池 (比如 ObservableCollection<RuleBase>)</param>
+        /// <param name="files">文件列表</param>
+        /// <param name="rules">规则列表</param>
+        /// <param name="progress">进度</param>
+        /// <param name="token">操作取消令牌</param>
+        /// <returns></returns>
         public static async Task ExecuteAsync(
             IEnumerable<ReNameFile> files,
             IEnumerable<BaseRule> rules,
             IProgress<int>? progress = null,
             CancellationToken token = default)
         {
-            // 将计算密集型逻辑完全移交给后台线程
+            var fileList = files.ToList();
+            // 新开一个后台线程来执行
             await Task.Run(() =>
             {
-                var fileList = files.ToList();
-                int totalSteps = rules.Count(r => r.Enable) + 1; // 规则数 + 1次冲突检测
+                int totalSteps = rules.Count(r => r.Enable) + 1;
                 int currentStep = 0;
 
-                // 1. 初始化
+                // 初始化
                 foreach (var file in fileList)
                 {
-                    token.ThrowIfCancellationRequested(); // 随时响应取消请求
+                    token.ThrowIfCancellationRequested();
                     file.NewName = file.Name;
                 }
 
-                // 2. 管道式处理
+                // 按照规则列表顺序处理
                 foreach (var rule in rules)
                 {
                     if (!rule.Enable)
                     {
-                        // 进度汇报：规则处理进度
+                        // 更新进度
                         currentStep++;
                         progress?.Report((currentStep * 100) / totalSteps);
                         continue;
@@ -81,12 +87,12 @@ namespace ReNamer.Engines
                     // 执行具体的规则分发 (这里沿用你原来的 switch 逻辑)
                     InvokeRule(fileList, rule);
 
-                    // 进度汇报：规则处理进度
+                    // 更新进度
                     currentStep++;
                     progress?.Report((currentStep * 100) / totalSteps);
                 }
 
-                // 3. 最后进行冲突检测
+                // 进行冲突检测
                 token.ThrowIfCancellationRequested();
                 CheckConflicts(fileList);
 
@@ -112,18 +118,6 @@ namespace ReNamer.Engines
                 case ExtensionRule r: Entension(files, r); break;
             }
         }
-
-
-        /// <summary>
-        /// 路径深度计算
-        /// </summary>
-        /// <param name="path"></param>
-        /// <returns></returns>
-        private static int GetPathDepth(string path)
-        {
-            return path.Split(Path.DirectorySeparatorChar).Length;
-        }
-
 
         /// <summary>
         /// 模拟父目录重命名对路径产生的影响计算“最终路径”
@@ -226,6 +220,16 @@ namespace ReNamer.Engines
         }
 
         /// <summary>
+        /// 路径深度计算
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        private static int GetPathDepth(string path)
+        {
+            return path.Split(Path.DirectorySeparatorChar).Length;
+        }
+
+        /// <summary>
         /// 执行重命名
         /// </summary>
         public static void ExecuteRename(IEnumerable<ReNameFile> files)
@@ -320,14 +324,13 @@ namespace ReNamer.Engines
 
             foreach (var f in files)
             {
-                // ---------- Path ----------
                 if (f.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                 {
                     string relative = f.Path.Substring(prefix.Length);
                     f.Path = Path.Combine(newDir, relative);
                 }
 
-                // ---------- Dir ----------
+                // 处理目录路径的情况
                 if (string.Equals(f.Dir, oldDir, StringComparison.OrdinalIgnoreCase))
                 {
                     f.Dir = newDir;
@@ -470,24 +473,20 @@ namespace ReNamer.Engines
         /// <param name="rule">插入规则</param>
         public static void Serialize(IEnumerable<ReNameFile> list, SerializeRule rule)
         {
-            if (list == null || rule == null) return;
+            // 计算最大补零长度 (基于启用项目的总数)
+            int enabledItemCount = list.Count(i => i.Enable);
 
-            // 1. 计算最大补零长度 (基于启用项目的总数)
-            // autoPaddingLength 计算逻辑对应 AHK 的 Log 实现
-            int enabledCount = list.Count(i => i.Enable);
+            // 如果没有启用项，则停止后续操作
+            if (enabledItemCount == 0) return;
 
-            if (enabledCount == 0) return; // 如果没有启用的，直接返回
+            long startVal = rule.SequenceStart;
+            // 计算结束序列的值
+            long endVal = (long)(enabledItemCount - 1) * rule.SequenceStep + rule.SequenceStart;
 
-
-            // 1. 计算第一项和最后一项的值
-            long firstVal = rule.SequenceStart;
-            long lastVal = (long)(enabledCount - 1) * rule.SequenceStep + rule.SequenceStart;
-
-            // 2. 取绝对值后，看谁的字符串更长
-            // 这样可以确保：如果最大是 9，长度就是 1；如果最大是 10，长度就是 2
+            // 计算自动 Padding 长度
             int autoPaddingLength = Math.Max(
-                Math.Abs(firstVal).ToString().Length,
-                Math.Abs(lastVal).ToString().Length
+                Math.Abs(startVal).ToString().Length,
+                Math.Abs(endVal).ToString().Length
             );
 
             string? currentDir = null;
@@ -495,43 +494,47 @@ namespace ReNamer.Engines
 
             foreach (var item in list)
             {
+                // 跳过未启用的项
                 if (!item.Enable) continue;
 
-                // 2. 检查目录变化以重置计数
+                // 检查目录变化以重置计数
                 if (currentDir == null || currentDir != item.Dir)
                 {
+                    // 记录当前目录
                     currentDir = item.Dir;
+
                     if (rule.ResetFolderChanges)
-                    {
                         num = 0;
-                    }
                 }
 
-                // 3. 生成序列号
+                // 计算当前序列值
                 long currentVal = (long)num++ * rule.SequenceStep + rule.SequenceStart;
+
+                // 生成序列文本
                 string sequence = Math.Abs(currentVal).ToString();
 
-                // 4. 处理补零逻辑
+                // 处理序列补零
                 if (rule.PaddingCount > 0)
                 {
+                    // 固定补零长度
                     sequence = sequence.PadLeft(rule.PaddingCount, '0');
                 }
                 else if (rule.PaddingCount <= -1)
                 {
-                    // 自动填充长度逻辑
+                    // 自动补零长度
                     sequence = sequence.PadLeft(autoPaddingLength, '0');
                 }
 
-                // 5. 处理负号
+                // 处理负数步长的情况
                 if (rule.SequenceStep < 0 && currentVal < 0)
                 {
                     sequence = "-" + sequence;
                 }
 
-                // 6 .确定操作的基础文本 (处理扩展名逻辑)
+                // 确定操作的基础文本 (处理扩展名逻辑)
                 string text = (item.IsDirectory || !rule.IgnoreExt) ? item.NewName : item.NewNameNoExt;
 
-                // 7. 根据位置插入序列号
+                // 根据位置插入序列号
                 switch (rule.Position)
                 {
                     case InsertPosition.Prefix:
@@ -556,7 +559,7 @@ namespace ReNamer.Engines
                         break;
                 }
 
-                // 8. 最后判断是否加上扩展名
+                // 最后判断是否加上扩展名
                 if (!item.IsDirectory && rule.IgnoreExt)
                     item.NewName = text + "." + item.Ext;
                 else
@@ -574,21 +577,19 @@ namespace ReNamer.Engines
         {
             if (list == null || rule == null) return;
 
-            // 正则表达式：匹配字符串末尾的数字
-            // 如果你的数字可能在中间，可以使用 Regex(@"\d+")，但通常重命名补零多针对末尾编号
+            // 匹配数字的正则表达式
             var numberRegex = new Regex(@"(\d+)");
 
             foreach (var item in list)
             {
+                // 跳过未被启用的项
                 if (!item.Enable) continue;
 
+                // 确定操作的基础文本 (处理扩展名逻辑)
                 string text = (item.IsDirectory || !rule.IgnoreExt) ? item.NewName : item.NewNameNoExt;
 
-                // --- 修正后的补零逻辑 ---
                 if (rule.RemoveZeroPadding)
                 {
-                    // 移除数字部分的前导零
-                    //text = numberRegex.Replace(text, m => m.Value.TrimStart('0') == "" ? "0" : m.Value.TrimStart('0'));
                     // 移除所有匹配到的数字序列的前导零
                     text = numberRegex.Replace(text, m =>
                     {
@@ -599,6 +600,7 @@ namespace ReNamer.Engines
                 }
                 else if (rule.ZeroPadding.Enable)
                 {
+                    // 补零
                     text = numberRegex.Replace(text, m =>
                     {
                         string numStr = m.Value;
@@ -609,25 +611,36 @@ namespace ReNamer.Engines
                     });
                 }
 
-                // --- 3. 文本填充 (保持原逻辑，处理整体长度) ---
+                // 文本填充
                 if (rule.TextPadding.Enable && !string.IsNullOrEmpty(rule.TextPadding.Character))
                 {
                     int currentLen = text.Length;
+
                     int targetLen = rule.TextPadding.Length;
 
                     if (currentLen < targetLen)
                     {
                         int needLen = targetLen - currentLen;
+
                         string padStr = rule.TextPadding.Character;
 
-                        // 优化：使用 Enumerable.Repeat 或 StringBuilder 替代 while 循环更高效
-                        string padding = string.Join("", Enumerable.Repeat(padStr, (needLen / padStr.Length) + 1)).Substring(0, needLen);
+                        // padStr 需要重复的次数 (向上取整)
+                        int repeatCount = (needLen / padStr.Length) + 1; // 总长度 / 单个长度，如果有余数就多加 1 组
+
+                        // 生成重复的序列
+                        IEnumerable<string> repeatSequence = Enumerable.Repeat(padStr, repeatCount);
+
+                        // 拼接序列
+                        string longStr = string.Join("", repeatSequence);
+
+                        // 从长字符串中截取精确的长度
+                        string padding = longStr.Substring(0, needLen);
 
                         text = rule.TextPadding.Direction == PaddingDirection.Left ? padding + text : text + padding;
                     }
                 }
 
-                // 最后拼接扩展名
+                // 最后判断是否加上扩展名
                 if (!item.IsDirectory && rule.IgnoreExt)
                     item.NewName = text + "." + item.Ext;
                 else
@@ -643,14 +656,16 @@ namespace ReNamer.Engines
         /// <param name="rule">插入规则</param>
         public static void Regex(IEnumerable<ReNameFile> list, RegexRule rule)
         {
-            if (list == null || rule == null || string.IsNullOrEmpty(rule.Regex)) return;
+            // 如果正则表达式内容为空，则停止执行
+            if (string.IsNullOrEmpty(rule.Regex)) return;
 
-            // 预编译正则表达式（性能优化）
+            // 配置表达式选项
             RegexOptions options = rule.IgnoreCase ? RegexOptions.IgnoreCase : RegexOptions.None;
 
-            // 如果是全字匹配，修改 Pattern
+            // 如果是全字匹配，则修改表达式
             string finalPattern = rule.IsExactMatch ? $@"\b{rule.Regex}\b" : rule.Regex;
 
+            // 创建正则表达式
             Regex regex;
             try
             {
@@ -664,24 +679,20 @@ namespace ReNamer.Engines
 
             foreach (var item in list)
             {
+                // 跳过未启用的项
                 if (!item.Enable) continue;
 
                 // 确定基础文本
                 string text = (item.IsDirectory || !rule.IgnoreExt) ? item.NewName : item.NewNameNoExt;
 
                 // 执行正则替换
-                // C# 的 Regex.Replace 支持 $1, $2 等捕获组引用
-                string result = regex.Replace(text, rule.ReplaceTo);
+                text = regex.Replace(text, rule.ReplaceTo);
 
                 // 最后判断是否加上扩展名
                 if (!item.IsDirectory && rule.IgnoreExt)
-                {
-                    item.NewName = result + "." + item.Ext;
-                }
+                    item.NewName = text + "." + item.Ext;
                 else
-                {
-                    item.NewName = result;
-                }
+                    item.NewName = text;
             }
         }
 
@@ -694,6 +705,7 @@ namespace ReNamer.Engines
         {
             foreach (var item in list)
             {
+                // 跳过未启用项
                 if (!item.Enable) continue;
 
                 // 获取基础文本 (处理目录和扩展名逻辑)
@@ -701,16 +713,20 @@ namespace ReNamer.Engines
 
                 if (item.IsDirectory)
                 {
+                    // 如果是目录则直接添加一个扩展名在名称之后
                     text += ("." + rule.Extension);
                 }
                 else
                 {
+                    // 如果是文件：
                     if (rule.IgnoreExt)
                     {
+                        // 直接添加新扩展名在旧扩展名之后
                         text += ("." + item.Ext + "." + rule.Extension);
                     }
                     else
                     {
+                        // 替换扩展名
                         var nameNoExt = Path.GetFileNameWithoutExtension(text);
                         text = nameNoExt + "." + rule.Extension;
                     }

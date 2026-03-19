@@ -11,8 +11,6 @@ namespace ReNamer.Models.ReName
 {
     public partial class ReNameFile : ObservableObject
     {
-        // --- 静态属性：一旦确定就不再变动，不走磁盘检查 ---
-
         [ObservableProperty]
         private string _path = String.Empty;
 
@@ -25,11 +23,10 @@ namespace ReNamer.Models.ReName
         [ObservableProperty]
         private string _ext = String.Empty;
 
-        // 在构造或扫描时就存好结果，避免 get 块触发 I/O
+
         [ObservableProperty]
         private bool _isDirectory;
 
-        // --- 动态属性：会随规则改变而改变，需要通知 UI ---
 
         /// <summary>
         /// 是否允许被修改
