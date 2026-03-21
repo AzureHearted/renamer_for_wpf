@@ -4,6 +4,7 @@ using GongSolutions.Wpf.DragDrop;
 using HandyControl.Controls;
 using Microsoft.Win32;
 using Newtonsoft.Json.Linq;
+using ReNamer.Comparers;
 using ReNamer.Engines;
 using ReNamer.Models.ReName;
 using ReNamer.Services;
@@ -32,11 +33,18 @@ namespace ReNamer.ViewModels
 {
     public partial class MainWindowViewModel : ObservableObject, IDropTarget
     {
+        public MainWindowViewModel()
+        {
+            _ = LoadPresets();
+
+            StatusMessage = "准备就绪";
+        }
+
         /// <summary>
         /// 版本
         /// </summary>
         [ObservableProperty]
-        private string _version = "v0.1.3-beta";
+        private string _version = "v0.1.4-beta";
 
         /// <summary>
         /// 标题
@@ -92,10 +100,10 @@ namespace ReNamer.ViewModels
                 newValue.CollectionChanged += OnRules_CollectionChanged;
 
                 // 获取新视图
-                var viewRules = CollectionViewSource.GetDefaultView(newValue);
+                var view = CollectionViewSource.GetDefaultView(newValue);
 
                 // 监听排序层：点击表头 SortDescriptions 变化
-                if (viewRules is INotifyPropertyChanged npc)
+                if (view is INotifyPropertyChanged npc)
                 {
                     npc.PropertyChanged += OnViewRules_PropertyChanged;
                 }
@@ -167,10 +175,10 @@ namespace ReNamer.ViewModels
                 newValue.CollectionChanged += OnFiles_CollectionChanged;
 
                 // 获取新视图
-                var viewRules = CollectionViewSource.GetDefaultView(newValue);
+                var view = CollectionViewSource.GetDefaultView(newValue);
 
                 // 监听排序层：点击表头 SortDescriptions 变化
-                if (viewRules is INotifyPropertyChanged npc)
+                if (view is INotifyPropertyChanged npc)
                 {
                     npc.PropertyChanged += OnViewFiles_PropertyChanged;
                 }
@@ -191,6 +199,27 @@ namespace ReNamer.ViewModels
         {
             if (_isRefreshing) return;
             //Debug.WriteLine("OnViewFiles_PropertyChanged");
+
+            if (sender is not ListCollectionView view)
+                return;
+
+            // 只处理排序变化
+            if (view.SortDescriptions.Count > 0)
+            {
+                var sort = view.SortDescriptions[0];
+
+                // 拦截默认排序
+                view.SortDescriptions.Clear();
+
+                Debug.WriteLine(sort.PropertyName);
+
+                // 替换为自然排序
+                view.CustomSort = new CustomSortComparer(
+                    sort.PropertyName,
+                    sort.Direction
+                );
+            }
+
             await RefreshAll();
         }
 
@@ -1019,13 +1048,6 @@ namespace ReNamer.ViewModels
             }
         }
 
-        public MainWindowViewModel()
-        {
-            _ = LoadPresets();
-
-            StatusMessage = "准备就绪";
-        }
-
         private void NotifyCommands()
         {
             ClearFileCommand.NotifyCanExecuteChanged();
@@ -1125,15 +1147,18 @@ namespace ReNamer.ViewModels
                 {
                     var view = CollectionViewSource.GetDefaultView(dg.ItemsSource);
 
-                    // 只有当 SortDescriptions 存在时才进入
-                    if (view.SortDescriptions.Count > 0)
+                    if (view is ListCollectionView listView && listView.CustomSort != null)
                     {
+
                         // 拿到当前排序结果
                         var visualItems = dg.Items.Cast<object>().ToList();
+
                         if (visualItems.Count > 0)
                         {
+
                             // 固化排序 (分别处理文件列表和规则列表)
                             var firstItem = visualItems[0];
+
                             if (firstItem is ReNameFile)
                                 SyncPhysicalOrder(Files, visualItems.Cast<ReNameFile>().ToList());
                             else if (firstItem is BaseRule)
@@ -1141,12 +1166,12 @@ namespace ReNamer.ViewModels
 
                             // 清空 SortDescriptions，防止重复进入当前执行逻辑
                             view.SortDescriptions.Clear();
+                            listView.CustomSort = null;
 
                             // 重置列头状态
                             foreach (var col in dg.Columns)
                             {
-                                if (col.SortDirection != null)
-                                    col.SortDirection = null;
+                                col.SortDirection = null;
                             }
 
                             // 刷新视图

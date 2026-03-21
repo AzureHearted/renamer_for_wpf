@@ -1,4 +1,5 @@
-﻿using ReNamer.Models.ReName;
+﻿using ReNamer.Comparers;
+using ReNamer.Models.ReName;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -86,7 +87,7 @@ namespace ReNamer.Services
                         options.Progress?.Report(processed * 100 / paths.Length);
                 }
 
-                return results.Distinct().ToList();
+                return results.Distinct().OrderBy(x => x, WindowsExplorerComparer.Instance).ToList();
             });
         }
 

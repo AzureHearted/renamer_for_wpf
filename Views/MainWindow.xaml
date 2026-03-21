@@ -183,6 +183,7 @@
                     <!--  Row样式  -->
                     <Style BasedOn="{StaticResource DataGridRowStyle}" TargetType="DataGridRow">
                         <Setter Property="Tag" Value="{Binding DataContext, ElementName=RuleDataGrid}" />
+                        <Setter Property="Margin" Value="0.3" />
                         <Setter Property="ContextMenu">
                             <Setter.Value>
                                 <ContextMenu>
@@ -401,6 +402,7 @@
                 <DataGrid.RowStyle>
                     <Style BasedOn="{StaticResource DataGridRowStyle}" TargetType="DataGridRow">
                         <Setter Property="Tag" Value="{Binding DataContext, ElementName=FileDataGrid}" />
+                        <Setter Property="Margin" Value="0.3" />
                         <Setter Property="ContextMenu">
                             <Setter.Value>
                                 <ContextMenu>
@@ -494,7 +496,13 @@
                     <DataGridTextColumn
                         Width="Auto"
                         MinWidth="100"
-                        MaxWidth="150"
+                        Binding="{Binding Name}"
+                        ElementStyle="{StaticResource TextOverflowStyle}"
+                        Header="文件名"
+                        IsReadOnly="True" />
+                    <DataGridTextColumn
+                        Width="Auto"
+                        MinWidth="100"
                         Binding="{Binding NewName}"
                         CanUserSort="False"
                         Header="新文件名">
@@ -513,14 +521,6 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn
-                        Width="Auto"
-                        MinWidth="100"
-                        MaxWidth="150"
-                        Binding="{Binding Name}"
-                        ElementStyle="{StaticResource TextOverflowStyle}"
-                        Header="文件名"
-                        IsReadOnly="True" />
                     <DataGridTextColumn
                         Width="Auto"
                         MinWidth="50"
