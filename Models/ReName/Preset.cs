@@ -48,6 +48,9 @@ namespace ReNamer.Models.ReName
 
             [ObservableProperty]
             private FilterItem _folder = new() { Enable = false };
+
+            [ObservableProperty]
+            private bool _includeHiddenOrSystem = false;
         }
 
         /// <summary>

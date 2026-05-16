@@ -51,7 +51,8 @@ namespace ReNamer.Services
                         {
                             Enable = Convert.ToBoolean(jo["Filters"]?["Folder"]?["Enable"] ?? true),
                             Regex = (jo["Filters"]?["Folder"]?["Regex"] ?? "").ToString()
-                        }
+                        },
+                        IncludeHiddenOrSystem = Convert.ToBoolean(jo["Filters"]?["IncludeHiddenOrSystem"] ?? false)
                     }
                 };
 

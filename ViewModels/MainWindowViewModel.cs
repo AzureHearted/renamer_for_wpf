@@ -44,7 +44,7 @@ namespace ReNamer.ViewModels
         /// 版本
         /// </summary>
         [ObservableProperty]
-        private string _version = "v0.1.4-beta";
+        private string _version = "v0.1.5-beta";
 
         /// <summary>
         /// 标题
@@ -520,6 +520,7 @@ namespace ReNamer.ViewModels
                 FileRegex = RegexUtils.SafeCreateRegex(CurrentPreset.Filters.File.Regex),
                 IncludeDirectories = CurrentPreset.Filters.Folder.Enable,
                 DirectoryRegex = RegexUtils.SafeCreateRegex(CurrentPreset.Filters.Folder.Regex),
+                IncludeHiddenOrSystem = CurrentPreset.Filters.IncludeHiddenOrSystem
             });
 
             if (validPaths == null || validPaths.Count == 0)
@@ -1046,6 +1047,15 @@ namespace ReNamer.ViewModels
             {
                 Debug.WriteLine("取消操作");
             }
+        }
+
+        /// <summary>
+        /// 打开预设目录
+        /// </summary>
+        [RelayCommand]
+        private void OpenPresetDir()
+        {
+            FileService.OpenPath(PresetDir);
         }
 
         private void NotifyCommands()

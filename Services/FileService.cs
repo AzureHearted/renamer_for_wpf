@@ -42,6 +42,11 @@ namespace ReNamer.Services
             public bool IncludeFiles { get; set; } = true;
 
             /// <summary>
+            /// 是否包含隐藏文件或系统文件
+            /// </summary>
+            public bool IncludeHiddenOrSystem { get; set; } = false;
+
+            /// <summary>
             /// 文件匹配正则（为空则全部）
             /// </summary>
             public Regex? FileRegex { get; set; }
@@ -130,6 +135,17 @@ namespace ReNamer.Services
         }
 
         /// <summary>
+        /// 判断路径是否是隐藏路径或系统路径
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        static bool IsHiddenOrSystem(string path)
+        {
+            var attr = File.GetAttributes(path);
+            return (attr & (FileAttributes.Hidden | FileAttributes.System)) != 0;
+        }
+
+        /// <summary>
         /// 文件匹配逻辑
         /// </summary>
         /// <param name="file"></param>
@@ -141,12 +157,24 @@ namespace ReNamer.Services
             if (!options.IncludeFiles)
                 return;
 
+            // 如果要排除隐藏文件或系统文件
+            if (!options.IncludeHiddenOrSystem)
+            {
+                // 如果发现是隐藏文件或系统文件则不记录该路径
+                if (IsHiddenOrSystem(file))
+                {
+                    return;
+                }
+            }
+
+            // 如果文件过滤器为则直接添加文件
             if (options.FileRegex == null)
             {
                 results.Add(file);
                 return;
             }
 
+            // 如果文件过滤器不为空，则只添加与过滤器匹配的路径
             if (options.FileRegex.IsMatch(Path.GetFileName(file)))
             {
                 results.Add(file);
@@ -164,6 +192,16 @@ namespace ReNamer.Services
         {
             if (!options.IncludeDirectories)
                 return;
+
+            // 如果要排除隐藏文件或系统文件
+            if (!options.IncludeHiddenOrSystem)
+            {
+                // 如果发现是隐藏文件或系统文件则不记录该路径
+                if (IsHiddenOrSystem(dir))
+                {
+                    return;
+                }
+            }
 
             if (options.DirectoryRegex == null)
             {

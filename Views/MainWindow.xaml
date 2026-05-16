@@ -92,6 +92,7 @@
                         <ColumnDefinition />
                         <ColumnDefinition />
                         <ColumnDefinition />
+                        <ColumnDefinition />
                     </Grid.ColumnDefinitions>
                     <hc:ComboBox
                         x:Name="PresetCombo"
@@ -127,9 +128,9 @@
                         Grid.Column="2"
                         Margin="4,0,0,0"
                         Command="{Binding SaveAsPresetCommand}"
-                        Content="另存为">
+                        Content="另存">
                         <Button.Style>
-                            <Style BasedOn="{StaticResource ButtonInfo}" TargetType="Button" />
+                            <Style BasedOn="{StaticResource ButtonWarning}" TargetType="Button" />
                         </Button.Style>
                     </Button>
                     <Button
@@ -148,6 +149,15 @@
                         Content="删除">
                         <Button.Style>
                             <Style BasedOn="{StaticResource ButtonDanger}" TargetType="Button" />
+                        </Button.Style>
+                    </Button>
+                    <Button
+                        Grid.Column="5"
+                        Margin="4,0,0,0"
+                        Command="{Binding OpenPresetDirCommand}"
+                        Content="预设目录">
+                        <Button.Style>
+                            <Style BasedOn="{StaticResource ButtonInfo}" TargetType="Button" />
                         </Button.Style>
                     </Button>
                 </Grid>
@@ -323,6 +333,7 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock
                         Grid.Column="0"
@@ -359,6 +370,9 @@
                             hc:InfoElement.Placeholder="输入正则表达式"
                             hc:InfoElement.ShowClearButton="True"
                             Text="{Binding CurrentPreset.Filters.Folder.Regex, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                    <Grid Grid.Column="3" Margin="6,0,0,0">
+                        <CheckBox Content="包含隐藏文件" IsChecked="{Binding CurrentPreset.Filters.IncludeHiddenOrSystem}" />
                     </Grid>
                 </Grid>
                 <Button
